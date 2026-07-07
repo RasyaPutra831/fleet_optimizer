@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleet Space Optimizer — Ambatublow</title>
+    <style>
+    :root {
+        --bg: #0e1418;
+        --panel: #161f26;
+        --panel2: #1d2832;
+        --line: #2a3742;
+        --ink: #e8eef2;
+        --dim: #8aa0ad;
+        --amber: #ffb338;
+        --teal: #3ad9c5;
+        --green: #46d17e;
+        --red: #ff5d5d;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+        background: var(--bg);
+        color: var(--ink);
+        font-family: 'Segoe UI', sans-serif;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    /* Layout utama */
+    .app {
+        display: grid;
+        grid-template-rows: 52px 1fr;
+        grid-template-columns: 300px 1fr 290px;
+        height: 100vh;
+    }
+
+    /* Header */
+    header {
+        grid-column: 1 / -1;
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 20px;
+    }
+    header .brand { display:flex; align-items:baseline; gap:10px; }
+    header h1 { font-size:15px; font-weight:600; }
+    header .tag { font-size:10px; color:var(--amber); text-transform:uppercase; letter-spacing:2px; font-weight:700; }
+    header .sub { font-size:11px; color:var(--dim); }
+    header .case { font-size:11px; color:var(--dim); }
+    header .case b { color:var(--teal); }
+
+    /* Kolom kiri */
+    .left {
+        background: var(--panel);
+        border-right: 1px solid var(--line);
+        padding: 18px;
+        overflow-y: auto;
+    }
+    .label {
+        font-size:10px; text-transform:uppercase; letter-spacing:2px;
+        color:var(--dim); margin-bottom:10px; font-weight:700;
+    }
+    .field { margin-bottom:16px; }
+    .field label { display:block; font-size:12px; color:var(--dim); margin-bottom:5px; }
+    select {
+        width:100%; background:var(--panel2); border:1px solid var(--line);
+        color:var(--ink); padding:9px 10px; border-radius:6px; font-size:13px;
+    }
+    .btn {
+        width:100%; padding:12px; border:none; border-radius:6px;
+        background:var(--amber); color:#1a1300; font-weight:700;
+        font-size:13px; letter-spacing:1px; text-transform:uppercase;
+        cursor:pointer; margin-bottom:8px;
+    }
+    .btn:hover { filter:brightness(1.1); }
+    .btn.ghost {
+        background:var(--panel2); color:var(--ink);
+        border:1px solid var(--line); font-weight:600;
+    }
+    .info-box {
+        background:var(--panel2); border:1px solid var(--line);
+        border-radius:6px; padding:12px; font-size:12px;
+        color:var(--dim); margin-top:14px; line-height:1.7;
+    }
+    .info-box b { color:var(--ink); }
+    .hint-csv {
+        font-size:10px; color:#5a6e7a; margin-top:4px; line-height:1.5;
+    }
+
+    /* Tengah: viewport 3D */
+    .center {
+        position: relative;
+        background: var(--bg);
+    }
+    #canvas { display:block; width:100%; height:100%; }
+    .vp-label {
+        position:absolute; top:12px; left:12px;
+        background:rgba(14,20,24,.7); border:1px solid var(--line);
+        padding:5px 10px; border-radius:6px; font-size:11px; color:var(--dim);
+        pointer-events:none;
+    }
+    .vp-hint {
+        position:absolute; bottom:12px; left:50%; transform:translateX(-50%);
+        font-size:11px; color:var(--dim); pointer-events:none;
+    }
+
+    /* Kolom kanan */
+    .right {
+        background: var(--panel);
+        border-left: 1px solid var(--line);
+        padding: 18px;
+        overflow-y: auto;
+    }
+
+    /* Gauge lingkaran */
+    .gauge-wrap { text-align:center; margin:8px 0 20px; }
+    .gauge { position:relative; width:140px; height:140px; margin:0 auto; }
+    .gauge svg { transform:rotate(-90deg); }
+    .gauge .val {
+        position:absolute; inset:0;
+        display:flex; flex-direction:column;
+        align-items:center; justify-content:center;
+    }
+    .gauge .num { font-size:30px; font-weight:700; color:var(--amber); }
+    .gauge .cap { font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:1px; }
+
+    /* Baris statistik */
+    .stat {
+        display:flex; justify-content:space-between; align-items:center;
+        padding:8px 0; border-bottom:1px solid var(--line); font-size:13px;
+    }
+    .stat .k { color:var(--dim); }
+    .stat .v { font-weight:600; }
+    .good { color:var(--green); }
+    .warn { color:var(--amber); }
+    .bad  { color:var(--red); }
+
+    /* Kartu penghematan */
+    .saving {
+        margin-top:16px;
+        background:linear-gradient(135deg,#14322a,#0f2620);
+        border:1px solid #1f5345; border-radius:8px; padding:14px;
+    }
+    .saving .cap { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--dim); }
+    .saving .big { font-size:22px; font-weight:700; color:var(--green); margin:4px 0; }
+    .saving .sub { font-size:12px; color:var(--dim); line-height:1.6; }
+
+    /* STEP D: perbandingan Manual vs AI */
+    .compare {
+        display:flex; align-items:center; justify-content:space-around;
+        margin-top:8px; padding:8px 0;
+    }
+    .cmp-item { text-align:center; }
+    .cmp-num { font-size:24px; font-weight:700; }
+    .bad-num { color:var(--red); }
+    .good-num { color:var(--green); }
+    .cmp-lbl { font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:1px; }
+    .cmp-arrow { font-size:20px; color:var(--dim); }
+
+    /* Daftar urutan muat */
+    .loadlist { margin-top:14px; max-height:160px; overflow-y:auto; }
+    .load-item {
+        display:flex; align-items:center; gap:8px;
+        padding:5px 0; border-bottom:1px solid var(--line);
+        font-size:11px; color:var(--dim);
+    }
+    .load-num { color:var(--amber); font-weight:700; width:20px; }
+    .load-dot { width:9px; height:9px; border-radius:2px; flex-shrink:0; }
+
+    /* Insight box */
+    .insight-box {
+        background: var(--panel2); border: 1px solid var(--line);
+        border-radius:8px; padding:12px; margin-top:16px;
+    }
+    .insight-title {
+        font-size:11px; font-weight:700; color:var(--amber);
+        text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;
+    }
+    .insight-row {
+        font-size:12px; color:var(--dim); padding:5px 0;
+        border-bottom:1px solid var(--line); line-height:1.6;
+    }
+    .insight-row:last-child { border-bottom:none; }
+    .good-row { color:var(--green) !important; }
+    .warn-row { color:var(--amber) !important; }
+
+    /* Tombol upload CSV yang bagus */
+    .upload-area {
+        border: 1.5px dashed var(--line); border-radius:8px;
+        padding:14px; text-align:center; cursor:pointer;
+        transition: border-color .2s, background .2s;
+        background: var(--panel2);
+    }
+    .upload-area:hover { border-color:var(--amber); background:#1a2530; }
+    .upload-area input[type=file] { display:none; }
+    .upload-icon { font-size:22px; margin-bottom:4px; }
+    .upload-label { font-size:12px; color:var(--dim); line-height:1.6; }
+    .upload-label b { color:var(--amber); }
+    .upload-label small { display:block; font-size:10px; color:#5a6e7a; margin-top:2px; }
+    .upload-filename {
+        font-size:11px; color:var(--green); margin-top:6px;
+        display:none; word-break:break-all;
+    }
+
+    /* State kosong */
+    .empty { text-align:center; padding:30px 10px; color:var(--dim); font-size:13px; line-height:1.7; }
+    ::-webkit-scrollbar { width:6px; }
+    ::-webkit-scrollbar-thumb { background:var(--line); border-radius:3px; }
+    </style>
+</head>
+<body>
+    <div class="app">
+
+    <!-- Header -->
+    <header>
+        <div class="brand">
+        <span class="tag">Fleet Optimizer</span>
+        <h1>3D Bin Packing Engine</h1>
+        <span class="sub">· Tim Ambatublow</span>
+        </div>
+        <div class="case">AI Open Innovation Challenge 2026 — <b>Case 2: Smart Logistics · PT Kawan Lama</b></div>
+    </header>
+
+    <!-- Kiri: kontrol -->
+    <div class="left">
+        <div class="label">1 · Muatan</div>
+        <div class="field">
+        <label>Jumlah barang</label>
+        <select id="selJumlah">
+            <option value="20">20 barang</option>
+            <option value="40" selected>40 barang</option>
+            <option value="80">80 barang</option>
+            <option value="120">120 barang</option>
+        </select>
+        </div>
+        <div class="field">
+            <label>Atau upload daftar barang (CSV)</label>
+            <div class="upload-area" onclick="document.getElementById('fileCsv').click()">
+                <input type="file" id="fileCsv" accept=".csv">
+                <div class="upload-icon">📂</div>
+                <div class="upload-label">
+                    <b>Klik untuk pilih file CSV</b>
+                    <small>Format: id, name, length, width, height, weight</small>
+                </div>
+                <div class="upload-filename" id="uploadFilename"></div>
+            </div>
+            <button class="btn ghost" id="btnResetCsv" style="margin-top:8px; display:none;">✕ Hapus upload, pakai data acak</button>
+        </div>
+
+        <div class="label">2 · Armada</div>
+        <div class="field">
+        <label>Kendaraan</label>
+        <select id="selTruk">
+            <option value="auto">⚡ Pilih otomatis (terbaik)</option>
+            <option value="Blind Van">Blind Van</option>
+            <option value="CDE Engkel">CDE Engkel</option>
+            <option value="CDD Colt">CDD Colt</option>
+        </select>
+        </div>
+
+        <button class="btn" id="btnRun">▶ Optimalkan Muatan</button>
+
+        <div class="info-box" id="infoBox">
+        Klik <b>Optimalkan Muatan</b> untuk menjalankan engine 3D Bin Packing.
+        </div>
+    </div>
+
+    <!-- Tengah: 3D viewport -->
+    <div class="center">
+        <canvas id="canvas"></canvas>
+        <div class="vp-label" id="vpLabel">Visualisasi 3D · Simulator</div>
+        <div class="vp-hint">Drag untuk memutar · Scroll untuk zoom</div>
+    </div>
+
+    <!-- Kanan: hasil -->
+    <div class="right">
+        <div class="label">Hasil Optimasi</div>
+        <div id="hasilArea">
+        <div class="empty">
+            Belum ada hasil.<br>Jalankan engine untuk melihat<br>
+            fill rate dan estimasi penghematan.
+        </div>
+        </div>
+    </div>
+
+    </div>
+
+    <!-- STEP E: untuk demo OFFLINE, ganti baris di bawah jadi: <script src="three.min.js"></script> -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="optimizer.js"></script>
+</body>
+</html>
