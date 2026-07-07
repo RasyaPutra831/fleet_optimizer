@@ -26,15 +26,13 @@
         overflow: hidden;
     }
 
-    /* Layout utama */
     .app {
         display: grid;
         grid-template-rows: 52px 1fr;
-        grid-template-columns: 300px 1fr 290px;
+        grid-template-columns: 320px 1fr 300px;
         height: 100vh;
     }
 
-    /* Header */
     header {
         grid-column: 1 / -1;
         background: var(--panel);
@@ -51,7 +49,6 @@
     header .case { font-size:11px; color:var(--dim); }
     header .case b { color:var(--teal); }
 
-    /* Kolom kiri */
     .left {
         background: var(--panel);
         border-right: 1px solid var(--line);
@@ -62,12 +59,14 @@
         font-size:10px; text-transform:uppercase; letter-spacing:2px;
         color:var(--dim); margin-bottom:10px; font-weight:700;
     }
-    .field { margin-bottom:16px; }
+    .field { margin-bottom:14px; }
     .field label { display:block; font-size:12px; color:var(--dim); margin-bottom:5px; }
-    select {
+    input[type=text], input[type=number] {
         width:100%; background:var(--panel2); border:1px solid var(--line);
-        color:var(--ink); padding:9px 10px; border-radius:6px; font-size:13px;
+        color:var(--ink); padding:8px 10px; border-radius:6px; font-size:13px;
     }
+    .dim-row { display:flex; gap:6px; }
+    .dim-row input { min-width:0; }
     .btn {
         width:100%; padding:12px; border:none; border-radius:6px;
         background:var(--amber); color:#1a1300; font-weight:700;
@@ -78,115 +77,18 @@
     .btn.ghost {
         background:var(--panel2); color:var(--ink);
         border:1px solid var(--line); font-weight:600;
+        padding:9px; font-size:12px; text-transform:none; letter-spacing:0;
     }
+    .btn.small { padding:9px; font-size:12px; }
     .info-box {
         background:var(--panel2); border:1px solid var(--line);
         border-radius:6px; padding:12px; font-size:12px;
         color:var(--dim); margin-top:14px; line-height:1.7;
     }
     .info-box b { color:var(--ink); }
-    .hint-csv {
-        font-size:10px; color:#5a6e7a; margin-top:4px; line-height:1.5;
-    }
+    .divider { border-top:1px solid var(--line); margin:18px 0; }
 
-    /* Tengah: viewport 3D */
-    .center {
-        position: relative;
-        background: var(--bg);
-    }
-    #canvas { display:block; width:100%; height:100%; }
-    .vp-label {
-        position:absolute; top:12px; left:12px;
-        background:rgba(14,20,24,.7); border:1px solid var(--line);
-        padding:5px 10px; border-radius:6px; font-size:11px; color:var(--dim);
-        pointer-events:none;
-    }
-    .vp-hint {
-        position:absolute; bottom:12px; left:50%; transform:translateX(-50%);
-        font-size:11px; color:var(--dim); pointer-events:none;
-    }
-
-    /* Kolom kanan */
-    .right {
-        background: var(--panel);
-        border-left: 1px solid var(--line);
-        padding: 18px;
-        overflow-y: auto;
-    }
-
-    /* Gauge lingkaran */
-    .gauge-wrap { text-align:center; margin:8px 0 20px; }
-    .gauge { position:relative; width:140px; height:140px; margin:0 auto; }
-    .gauge svg { transform:rotate(-90deg); }
-    .gauge .val {
-        position:absolute; inset:0;
-        display:flex; flex-direction:column;
-        align-items:center; justify-content:center;
-    }
-    .gauge .num { font-size:30px; font-weight:700; color:var(--amber); }
-    .gauge .cap { font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:1px; }
-
-    /* Baris statistik */
-    .stat {
-        display:flex; justify-content:space-between; align-items:center;
-        padding:8px 0; border-bottom:1px solid var(--line); font-size:13px;
-    }
-    .stat .k { color:var(--dim); }
-    .stat .v { font-weight:600; }
-    .good { color:var(--green); }
-    .warn { color:var(--amber); }
-    .bad  { color:var(--red); }
-
-    /* Kartu penghematan */
-    .saving {
-        margin-top:16px;
-        background:linear-gradient(135deg,#14322a,#0f2620);
-        border:1px solid #1f5345; border-radius:8px; padding:14px;
-    }
-    .saving .cap { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--dim); }
-    .saving .big { font-size:22px; font-weight:700; color:var(--green); margin:4px 0; }
-    .saving .sub { font-size:12px; color:var(--dim); line-height:1.6; }
-
-    /* STEP D: perbandingan Manual vs AI */
-    .compare {
-        display:flex; align-items:center; justify-content:space-around;
-        margin-top:8px; padding:8px 0;
-    }
-    .cmp-item { text-align:center; }
-    .cmp-num { font-size:24px; font-weight:700; }
-    .bad-num { color:var(--red); }
-    .good-num { color:var(--green); }
-    .cmp-lbl { font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:1px; }
-    .cmp-arrow { font-size:20px; color:var(--dim); }
-
-    /* Daftar urutan muat */
-    .loadlist { margin-top:14px; max-height:160px; overflow-y:auto; }
-    .load-item {
-        display:flex; align-items:center; gap:8px;
-        padding:5px 0; border-bottom:1px solid var(--line);
-        font-size:11px; color:var(--dim);
-    }
-    .load-num { color:var(--amber); font-weight:700; width:20px; }
-    .load-dot { width:9px; height:9px; border-radius:2px; flex-shrink:0; }
-
-    /* Insight box */
-    .insight-box {
-        background: var(--panel2); border: 1px solid var(--line);
-        border-radius:8px; padding:12px; margin-top:16px;
-    }
-    .insight-title {
-        font-size:11px; font-weight:700; color:var(--amber);
-        text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;
-    }
-    .insight-row {
-        font-size:12px; color:var(--dim); padding:5px 0;
-        border-bottom:1px solid var(--line); line-height:1.6;
-    }
-    .insight-row:last-child { border-bottom:none; }
-    .good-row { color:var(--green) !important; }
-    .warn-row { color:var(--amber) !important; }
-
-    /* Tombol upload CSV yang bagus */
+    /* Upload CSV */
     .upload-area {
         border: 1.5px dashed var(--line); border-radius:8px;
         padding:14px; text-align:center; cursor:pointer;
@@ -204,8 +106,149 @@
         display:none; word-break:break-all;
     }
 
-    /* State kosong */
+    /* Daftar armada */
+    .fleet-list { max-height:220px; overflow-y:auto; margin-top:4px; }
+    .fleet-item {
+        display:flex; align-items:center; gap:10px;
+        background:var(--panel2); border:1px solid var(--line);
+        border-radius:6px; padding:9px 10px; margin-bottom:6px;
+        cursor:pointer; transition: border-color .15s;
+    }
+    .fleet-item:hover { border-color:var(--amber); }
+    .fleet-item input[type=checkbox] { accent-color:var(--amber); width:15px; height:15px; flex-shrink:0; }
+    .fleet-info { flex:1; min-width:0; }
+    .fleet-info b { font-size:13px; display:block; }
+    .fleet-info small { font-size:10px; color:var(--dim); }
+    .fleet-del {
+        background:none; border:none; color:var(--dim); cursor:pointer;
+        font-size:13px; padding:4px 6px; border-radius:4px; flex-shrink:0;
+    }
+    .fleet-del:hover { color:var(--red); background:#2a1a1a; }
+    .fleet-empty {
+        text-align:center; font-size:12px; color:var(--dim);
+        padding:16px 8px; line-height:1.6;
+    }
+
+    /* Tengah: area visualisasi (bisa 1 atau banyak) */
+    .center {
+        position: relative;
+        background: var(--bg);
+        overflow-y: auto;
+        padding: 14px;
+    }
+    .viz-single { display:flex; flex-direction:column; height:100%; }
+    .viz-single .viz-card { flex:1; display:flex; flex-direction:column; }
+    .viz-single .viz-canvas { flex:1; }
+    .viz-grid {
+        display:grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap:14px;
+        height:100%;
+    }
+    .viz-card {
+        background:var(--panel); border:1px solid var(--line);
+        border-radius:10px; padding:12px; display:flex; flex-direction:column;
+        min-height:340px;
+    }
+    .viz-card.clickable { cursor:pointer; transition: border-color .15s, transform .1s; }
+    .viz-card.clickable:hover { border-color:var(--amber); }
+    .viz-card.selected { border-color:var(--amber); box-shadow:0 0 0 1px var(--amber); }
+    .viz-head { display:flex; justify-content:space-between; align-items:center; }
+    .viz-title { font-size:14px; font-weight:700; display:flex; align-items:center; gap:8px; }
+    .badge-rec {
+        font-size:9px; background:var(--amber); color:#1a1300;
+        padding:2px 7px; border-radius:10px; font-weight:700; letter-spacing:.5px;
+    }
+    .viz-fill { font-size:13px; font-weight:700; }
+    .viz-fill.good { color:var(--green); }
+    .viz-fill.warn { color:var(--amber); }
+    .viz-fill.bad { color:var(--red); }
+    .viz-sub { font-size:11px; color:var(--dim); margin-top:2px; }
+    .viz-canvas { width:100%; flex:1; min-height:240px; border-radius:6px; margin-top:8px; display:block; }
+    .viz-click-hint {
+        text-align:center; font-size:11px; color:var(--dim); padding-top:8px;
+    }
+    .btn-back {
+        align-self:flex-start;
+        background:var(--panel2); color:var(--amber);
+        border:1px solid var(--line); border-radius:6px;
+        padding:8px 14px; font-size:12px; font-weight:600;
+        cursor:pointer; margin-bottom:10px;
+        transition: border-color .15s;
+    }
+    .btn-back:hover { border-color:var(--amber); }
+
+    /* Kanan: hasil */
+    .right {
+        background: var(--panel);
+        border-left: 1px solid var(--line);
+        padding: 18px;
+        overflow-y: auto;
+    }
+    .ref-label {
+        font-size:12px; color:var(--dim); margin-bottom:8px;
+        padding:8px 10px; background:var(--panel2); border-radius:6px;
+        border:1px solid var(--line);
+    }
+    .ref-label b { color:var(--amber); }
+
+    .gauge-wrap { text-align:center; margin:8px 0 20px; }
+    .gauge { position:relative; width:140px; height:140px; margin:0 auto; }
+    .gauge svg { transform:rotate(-90deg); }
+    .gauge .val {
+        position:absolute; inset:0;
+        display:flex; flex-direction:column;
+        align-items:center; justify-content:center;
+    }
+    .gauge .num { font-size:30px; font-weight:700; color:var(--amber); }
+    .gauge .cap { font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:1px; }
+
+    .stat {
+        display:flex; justify-content:space-between; align-items:center;
+        padding:8px 0; border-bottom:1px solid var(--line); font-size:13px;
+    }
+    .stat .k { color:var(--dim); }
+    .stat .v { font-weight:600; }
+    .good { color:var(--green); }
+    .warn { color:var(--amber); }
+    .bad  { color:var(--red); }
+
+    .insight-box {
+        background: var(--panel2); border: 1px solid var(--line);
+        border-radius:8px; padding:12px; margin-top:16px;
+    }
+    .insight-title {
+        font-size:11px; font-weight:700; color:var(--amber);
+        text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;
+    }
+    .insight-row {
+        font-size:12px; color:var(--dim); padding:5px 0;
+        border-bottom:1px solid var(--line); line-height:1.6;
+    }
+    .insight-row:last-child { border-bottom:none; }
+    .good-row { color:var(--green) !important; }
+    .warn-row { color:var(--amber) !important; }
+
+    .saving {
+        margin-top:16px;
+        background:linear-gradient(135deg,#14322a,#0f2620);
+        border:1px solid #1f5345; border-radius:8px; padding:14px;
+    }
+    .saving .cap { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--dim); }
+    .saving .big { font-size:22px; font-weight:700; color:var(--green); margin:4px 0; }
+    .saving .sub { font-size:12px; color:var(--dim); line-height:1.6; }
+
+    .loadlist { margin-top:14px; max-height:160px; overflow-y:auto; }
+    .load-item {
+        display:flex; align-items:center; gap:8px;
+        padding:5px 0; border-bottom:1px solid var(--line);
+        font-size:11px; color:var(--dim);
+    }
+    .load-num { color:var(--amber); font-weight:700; width:20px; }
+    .load-dot { width:9px; height:9px; border-radius:2px; flex-shrink:0; }
+
     .empty { text-align:center; padding:30px 10px; color:var(--dim); font-size:13px; line-height:1.7; }
+
     ::-webkit-scrollbar { width:6px; }
     ::-webkit-scrollbar-thumb { background:var(--line); border-radius:3px; }
     </style>
@@ -213,7 +256,6 @@
 <body>
     <div class="app">
 
-    <!-- Header -->
     <header>
         <div class="brand">
         <span class="tag">Fleet Optimizer</span>
@@ -223,71 +265,84 @@
         <div class="case">AI Open Innovation Challenge 2026 — <b>Case 2: Smart Logistics · PT Kawan Lama</b></div>
     </header>
 
-    <!-- Kiri: kontrol -->
+    <!-- KIRI -->
     <div class="left">
-        <div class="label">1 · Muatan</div>
+        <div class="label">1 · Data Barang (CSV)</div>
         <div class="field">
-        <label>Jumlah barang</label>
-        <select id="selJumlah">
-            <option value="20">20 barang</option>
-            <option value="40" selected>40 barang</option>
-            <option value="80">80 barang</option>
-            <option value="120">120 barang</option>
-        </select>
-        </div>
-        <div class="field">
-            <label>Atau upload daftar barang (CSV)</label>
             <div class="upload-area" onclick="document.getElementById('fileCsv').click()">
                 <input type="file" id="fileCsv" accept=".csv">
                 <div class="upload-icon">📂</div>
                 <div class="upload-label">
                     <b>Klik untuk pilih file CSV</b>
-                    <small>Format: id, name, length, width, height, weight</small>
+                    <small>Format: id, name, length, width, height, weight (cm & kg)</small>
                 </div>
                 <div class="upload-filename" id="uploadFilename"></div>
             </div>
-            <button class="btn ghost" id="btnResetCsv" style="margin-top:8px; display:none;">✕ Hapus upload, pakai data acak</button>
+            <button class="btn ghost" id="btnResetCsv" style="margin-top:6px; display:none;">✕ Hapus data barang</button>
         </div>
 
-        <div class="label">2 · Armada</div>
+        <div class="divider"></div>
+
+        <div class="label">2 · Tambah Armada Baru</div>
         <div class="field">
-        <label>Kendaraan</label>
-        <select id="selTruk">
-            <option value="auto">⚡ Pilih otomatis (terbaik)</option>
-            <option value="Blind Van">Blind Van</option>
-            <option value="CDE Engkel">CDE Engkel</option>
-            <option value="CDD Colt">CDD Colt</option>
-        </select>
+            <label>Nama armada</label>
+            <input type="text" id="inNama" placeholder="cth: Truk Box Besar">
         </div>
+        <div class="field">
+            <label>Dimensi kargo dalam — P × L × T (cm)</label>
+            <div class="dim-row">
+                <input type="number" id="inP" placeholder="P" min="1">
+                <input type="number" id="inL" placeholder="L" min="1">
+                <input type="number" id="inT" placeholder="T" min="1">
+            </div>
+        </div>
+        <div class="field">
+            <label>Kapasitas berat maks (kg) — opsional</label>
+            <input type="number" id="inB" placeholder="cth: 2000" min="1">
+        </div>
+        <button class="btn small ghost" id="btnSimpanArmada">＋ Simpan Armada</button>
+
+        <div class="divider"></div>
+
+        <div class="label">3 · Pilih Armada (centang 1–3)</div>
+        <div class="fleet-list" id="daftarArmada"></div>
+
+        <div class="divider"></div>
 
         <button class="btn" id="btnRun">▶ Optimalkan Muatan</button>
 
         <div class="info-box" id="infoBox">
-        Klik <b>Optimalkan Muatan</b> untuk menjalankan engine 3D Bin Packing.
+        Upload CSV barang, pilih armada, lalu klik <b>Optimalkan Muatan</b>.<br>
+        Centang <b>2–3 armada</b> untuk mode komparasi.
         </div>
     </div>
 
-    <!-- Tengah: 3D viewport -->
+    <!-- TENGAH: area visualisasi -->
     <div class="center">
-        <canvas id="canvas"></canvas>
-        <div class="vp-label" id="vpLabel">Visualisasi 3D · Simulator</div>
-        <div class="vp-hint">Drag untuk memutar · Scroll untuk zoom</div>
+        <div id="vizArea" class="viz-single">
+            <div class="empty" style="margin:auto;">
+                Belum ada visualisasi.<br><br>
+                1. Upload CSV barang<br>
+                2. Centang armada di panel kiri<br>
+                3. Klik <b style="color:var(--amber)">Optimalkan Muatan</b>
+            </div>
+        </div>
     </div>
 
-    <!-- Kanan: hasil -->
+    <!-- KANAN: insight -->
     <div class="right">
         <div class="label">Hasil Optimasi</div>
         <div id="hasilArea">
         <div class="empty">
-            Belum ada hasil.<br>Jalankan engine untuk melihat<br>
-            fill rate dan estimasi penghematan.
+            Belum ada hasil.<br>Jalankan optimasi untuk melihat<br>
+            insight dan estimasi biaya.
         </div>
         </div>
     </div>
 
     </div>
 
-    <!-- STEP E: untuk demo OFFLINE, ganti baris di bawah jadi: <script src="three.min.js"></script> -->
+    <!-- Untuk demo OFFLINE: ganti baris di bawah jadi <script src="three.min.js"></script> -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="optimizer.js"></script>
 </body>
