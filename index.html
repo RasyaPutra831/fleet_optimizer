@@ -138,7 +138,7 @@
     }
     .viz-single { display:flex; flex-direction:column; height:100%; }
     .viz-single .viz-card { flex:1; display:flex; flex-direction:column; }
-    .viz-single .viz-canvas { flex:1; }
+    .viz-single .viz-canvas-wrap { flex:1; }
     .viz-grid {
         display:grid;
         grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
@@ -165,6 +165,14 @@
     .viz-fill.bad { color:var(--red); }
     .viz-sub { font-size:11px; color:var(--dim); margin-top:2px; }
     .viz-canvas { width:100%; flex:1; min-height:240px; border-radius:6px; margin-top:8px; display:block; }
+    .viz-canvas-wrap { position:relative; flex:1; display:flex; min-height:240px; }
+    .viz-canvas-wrap .viz-canvas { margin-top:0; }
+    .viz-tooltip {
+        position:absolute; pointer-events:none; z-index:20;
+        background:rgba(14,20,24,.95); border:1px solid var(--amber);
+        color:var(--ink); font-size:11px; padding:5px 9px; border-radius:5px;
+        white-space:nowrap; font-weight:600;
+    }
     .viz-click-hint {
         text-align:center; font-size:11px; color:var(--dim); padding-top:8px;
     }
@@ -177,6 +185,67 @@
         transition: border-color .15s;
     }
     .btn-back:hover { border-color:var(--amber); }
+
+    /* Kombinasi: 1 card berisi grid mini truk */
+    .kombo-card { cursor:pointer; }
+    .kombo-mini-grid {
+        display:grid; gap:8px; flex:1; margin-top:8px; min-height:240px;
+    }
+    .kombo-mini-cell {
+        position:relative; background:#0e1418;
+        border:1px solid var(--line); border-radius:6px;
+        display:flex; flex-direction:column; overflow:hidden;
+    }
+    .mini-label {
+        font-size:10px; color:var(--dim); padding:5px 8px;
+        border-bottom:1px solid var(--line); font-weight:600;
+    }
+    .mini-canvas { width:100%; flex:1; min-height:180px; display:block; }
+    .kombo-card.clickable:hover { border-color:var(--amber); }
+
+    /* Navigasi antar truk saat fokus */
+    .kombo-nav {
+        display:flex; justify-content:space-between; align-items:center;
+        margin-bottom:10px; gap:10px;
+    }
+    .kombo-nav-arrows { display:flex; align-items:center; gap:10px; }
+    .nav-arrow {
+        background:var(--panel2); color:var(--amber);
+        border:1px solid var(--line); border-radius:6px;
+        width:36px; height:32px; font-size:14px; cursor:pointer;
+        transition: border-color .15s, background .15s;
+    }
+    .nav-arrow:hover { border-color:var(--amber); background:#1a2530; }
+    .nav-indicator { font-size:12px; color:var(--dim); font-weight:600; min-width:70px; text-align:center; }
+
+    /* Panel kontrol animasi */
+    .anim-panel {
+        background:var(--panel2); border:1px solid var(--line);
+        border-radius:8px; padding:10px; margin:8px 0 12px;
+    }
+    .anim-status {
+        font-size:11px; color:var(--amber); text-align:center;
+        margin-bottom:8px; font-weight:600; min-height:15px;
+    }
+    .anim-controls { display:flex; gap:6px; }
+    .anim-btn {
+        flex:1; padding:8px 6px; border:1px solid var(--line);
+        background:var(--panel); color:var(--ink); border-radius:6px;
+        font-size:11px; font-weight:600; cursor:pointer;
+        transition: border-color .15s, background .15s;
+    }
+    .anim-btn:hover { border-color:var(--amber); }
+    .anim-btn.start { background:var(--amber); color:#1a1300; border:none; }
+    .anim-btn.exit { color:var(--red); }
+    .anim-btn.exit:hover { border-color:var(--red); background:#2a1414; }
+
+    /* baris urutan muat saat animasi */
+    .load-item.done { opacity:.5; }
+    .load-item.active {
+        background:#2a2410; border-radius:5px;
+        border-left:3px solid var(--amber); padding-left:6px;
+    }
+    .load-item.active .load-num { color:var(--amber); }
 
     /* Kanan: hasil */
     .right {
@@ -249,6 +318,19 @@
 
     .empty { text-align:center; padding:30px 10px; color:var(--dim); font-size:13px; line-height:1.7; }
 
+    /* Daftar alternatif kombinasi */
+    .alt-list { margin-top:4px; }
+    .alt-item {
+        background:var(--panel2); border:1px solid var(--line);
+        border-radius:6px; padding:9px 11px; margin-bottom:6px;
+    }
+    .alt-head {
+        display:flex; justify-content:space-between; align-items:center;
+        font-size:12px; font-weight:600;
+    }
+    .alt-cost { color:var(--dim); }
+    .alt-sub { font-size:10px; color:#5a6e7a; margin-top:2px; }
+
     ::-webkit-scrollbar { width:6px; }
     ::-webkit-scrollbar-thumb { background:var(--line); border-radius:3px; }
     </style>
@@ -300,6 +382,10 @@
             <label>Kapasitas berat maks (kg) — opsional</label>
             <input type="number" id="inB" placeholder="cth: 2000" min="1">
         </div>
+        <div class="field">
+            <label>Biaya operasional per trip (Rp)</label>
+            <input type="number" id="inBiaya" placeholder="cth: 400000" min="1">
+        </div>
         <button class="btn small ghost" id="btnSimpanArmada">＋ Simpan Armada</button>
 
         <div class="divider"></div>
@@ -310,10 +396,11 @@
         <div class="divider"></div>
 
         <button class="btn" id="btnRun">▶ Optimalkan Muatan</button>
+        <button class="btn ghost" id="btnKombinasi" style="text-transform:none; letter-spacing:0; font-weight:700;">🔍 Cari Kombinasi Truk Termurah</button>
 
         <div class="info-box" id="infoBox">
         Upload CSV barang, pilih armada, lalu klik <b>Optimalkan Muatan</b>.<br>
-        Centang <b>2–3 armada</b> untuk mode komparasi.
+        Centang <b>2–3 armada</b> untuk komparasi, atau klik <b>Cari Kombinasi Truk Termurah</b> untuk rekomendasi otomatis (bisa 2 truk kecil vs 1 besar).
         </div>
     </div>
 
