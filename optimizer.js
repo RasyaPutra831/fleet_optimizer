@@ -44,13 +44,18 @@ const FLEET_KEY = 'fleet_db_v2';
 function loadFleets() {
   try {
     const raw = localStorage.getItem(FLEET_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      // migrasi: pastikan semua armada punya field 'tersedia'
+      arr.forEach(f => { if (f.tersedia === undefined) f.tersedia = true; });
+      return arr;
+    }
   } catch (e) {}
   // default awal (bisa dihapus user)
   return [
-    { nama: 'Blind Van',  length: 240, width: 160, height: 130, max_weight: 800,  biaya: 200000 },
-    { nama: 'CDE Engkel', length: 300, width: 160, height: 170, max_weight: 2000, biaya: 350000 },
-    { nama: 'CDD Colt',   length: 425, width: 185, height: 190, max_weight: 4000, biaya: 550000 },
+    { nama: 'Blind Van',  length: 240, width: 160, height: 130, max_weight: 800,  biaya: 200000, tersedia: true },
+    { nama: 'CDE Engkel', length: 300, width: 160, height: 170, max_weight: 2000, biaya: 350000, tersedia: true },
+    { nama: 'CDD Colt',   length: 425, width: 185, height: 190, max_weight: 4000, biaya: 550000, tersedia: true },
   ];
 }
 function saveFleets(fleets) {
@@ -65,54 +70,115 @@ saveFleets(FLEETS); // pastikan default tersimpan
 let manifest = null; // null = belum ada data
 
 // ------------------------------------------------------------
-// 4. ENGINE — 3D Bin Packing (heuristik best-fit decreasing)
+// 4. ENGINE — 3D Bin Packing
+// packSekaliJalan = satu kali jalan dengan urutan tertentu (Level 1:
+//   support ratio + snug bonus). packItems = wrapper multi-start (Level 2):
+//   coba beberapa strategi urutan, ambil hasil terbaik.
 // ------------------------------------------------------------
-function packItems(mf, fleet) {
+function packSekaliJalan(mf, fleet, sorter, opsi = {}) {
   const items = mf.map(it => ({ ...it, vol: it.length*it.width*it.height }))
-                  .sort((a,b) => b.vol - a.vol);
+                  .sort(sorter);
   const W = fleet.width, H = fleet.height, D = fleet.length;
   const placed = [], unfitted = [];
   let points = [{x:0,y:0,z:0}];
+  const EPS = 0.01;
+  const tanpaSnug = !!opsi.tanpaSnug; // mode cepat: skip perhitungan snug
+  const kapasitasBerat = fleet.max_weight || Infinity;
+  let beratTerpakai = 0;
 
   function overlap(a,b){return !(a.x+a.w<=b.x||b.x+b.w<=a.x||a.y+a.h<=b.y||b.y+b.h<=a.y||a.z+a.d<=b.z||b.z+b.d<=a.z);}
+
+  // LEVEL 1a: support ratio — barang di atas harus tertopang >= 70% luas alasnya.
+  // Mencegah penempatan "melayang" yang tidak realistis.
+  function rasioTopang(box) {
+    if (box.y === 0) return 1; // di lantai = tertopang penuh
+    let area = 0;
+    for (const p of placed) {
+      if (Math.abs(p.y + p.h - box.y) < EPS) {
+        const ox = Math.max(0, Math.min(box.x+box.w, p.x+p.w) - Math.max(box.x, p.x));
+        const oz = Math.max(0, Math.min(box.z+box.d, p.z+p.d) - Math.max(box.z, p.z));
+        area += ox * oz;
+      }
+    }
+    return area / (box.w * box.d);
+  }
+
   function fits(box){
-    if(box.x+box.w>W||box.y+box.h>H||box.z+box.d>D)return false;
+    if(box.x+box.w>W+EPS||box.y+box.h>H+EPS||box.z+box.d>D+EPS)return false;
     for(const p of placed)if(overlap(box,p))return false;
-    if(box.y===0)return true;
-    for(const p of placed){if(Math.abs(p.y+p.h-box.y)<0.01&&box.x<p.x+p.w&&p.x<box.x+box.w&&box.z<p.z+p.d&&p.z<box.z+box.d)return true;}
-    return false;
+    return rasioTopang(box) >= 0.7;
+  }
+
+  // LEVEL 1b: snug bonus — hitung berapa sisi box yang menempel
+  // (dinding atau box lain). Makin nempel makin baik -> mengurangi celah.
+  function hitungSnug(box) {
+    let s = 0;
+    if (box.x < EPS) s++;                    // nempel dinding kiri
+    if (Math.abs(box.x+box.w - W) < EPS) s++; // dinding kanan
+    if (box.z < EPS) s++;                    // dinding depan (tertutup)
+    for (const p of placed) {
+      // nempel sisi kiri/kanan box lain
+      if ((Math.abs(p.x+p.w - box.x) < EPS || Math.abs(box.x+box.w - p.x) < EPS) &&
+          box.z < p.z+p.d && p.z < box.z+box.d &&
+          box.y < p.y+p.h && p.y < box.y+box.h) { s++; break; }
+    }
+    for (const p of placed) {
+      // nempel depan/belakang box lain
+      if ((Math.abs(p.z+p.d - box.z) < EPS || Math.abs(box.z+box.d - p.z) < EPS) &&
+          box.x < p.x+p.w && p.x < box.x+box.w &&
+          box.y < p.y+p.h && p.y < box.y+box.h) { s++; break; }
+    }
+    return s; // 0..5
   }
 
   for (const it of items) {
-    // 6 orientasi: semua kombinasi sisi mana yang jadi tinggi (h) & bagaimana
-    // sisi lainnya diputar. Ini memungkinkan barang "ditidurkan" agar hemat tinggi.
     const [a, c, e] = [it.length, it.width, it.height];
     const orients = [
-      {w:c, h:e, d:a}, // berdiri normal (tinggi = height asli)
-      {w:a, h:e, d:c}, // berdiri, diputar 90°
-      {w:c, h:a, d:e}, // rebah — panjang jadi tinggi
-      {w:e, h:a, d:c}, // rebah, diputar
-      {w:a, h:c, d:e}, // rebah — lebar jadi tinggi
-      {w:e, h:c, d:a}, // rebah, diputar
+      {w:c, h:e, d:a}, {w:a, h:e, d:c},
+      {w:c, h:a, d:e}, {w:e, h:a, d:c},
+      {w:a, h:c, d:e}, {w:e, h:c, d:a},
     ];
+    // ENFORCEMENT BERAT: kalau menambah barang ini melebihi kapasitas truk, skip
+    if (beratTerpakai + it.weight > kapasitasBerat) {
+      unfitted.push(it.id);
+      continue;
+    }
+    // snug mahal untuk manifest besar — skip saat mode cepat atau sudah banyak barang
+    const pakaiSnug = !tanpaSnug && placed.length <= 100;
+    // urutkan titik (y,z,x) menaik -> early-exit karena skor didominasi y lalu z
+    points.sort((p,q) => p.y-q.y || p.z-q.z || p.x-q.x);
     let best=null, bestScore=Infinity;
     for (const p of points) {
+      // batas bawah skor dari titik ini (konservatif); titik selanjutnya pasti >= ini
+      if (p.y*100000 + p.z*1000 - 450 > bestScore) break;
       for (const o of orients) {
         const box = {x:p.x,y:p.y,z:p.z,w:o.w,h:o.h,d:o.d,id:it.id,name:it.name};
         if (fits(box)) {
-          // Skor: utamakan posisi rendah (y), lalu tinggi box yang kecil
-          // (dorong barang "tiduran" agar tidak boros tinggi), lalu rapat ke dalam.
-          const score = box.y*100000 + box.h*1000 + box.z*10 + box.x;
+          const snug = pakaiSnug ? hitungSnug(box) : 0;
+          const score = box.y*100000 + box.z*1000 + box.h*100 + box.x - snug*40;
           if (score < bestScore) { bestScore=score; best=box; }
         }
       }
     }
     if (best) {
       placed.push(best);
+      beratTerpakai += it.weight;
       points.push({x:best.x+best.w,y:best.y,z:best.z});
       points.push({x:best.x,y:best.y+best.h,z:best.z});
       points.push({x:best.x,y:best.y,z:best.z+best.d});
-      points = points.filter(p=>!(p.x===best.x&&p.y===best.y&&p.z===best.z));
+      // pangkas: buang titik yang kini tertutup box baru (tidak mungkin jadi posisi)
+      const b = best;
+      points = points.filter(p =>
+        !(p.x >= b.x-EPS && p.x < b.x+b.w-EPS &&
+          p.y >= b.y-EPS && p.y < b.y+b.h-EPS &&
+          p.z >= b.z-EPS && p.z < b.z+b.d-EPS));
+      // dedup titik
+      const seen = new Set();
+      points = points.filter(p => {
+        const k = p.x+'|'+p.y+'|'+p.z;
+        if (seen.has(k)) return false;
+        seen.add(k); return true;
+      });
     } else unfitted.push(it.id);
   }
 
@@ -121,7 +187,6 @@ function packItems(mf, fleet) {
   const berat = mf.filter(m=>!unfitted.includes(m.id)).reduce((s,m)=>s+m.weight,0);
   const terlaluBesar = mf.filter(m=>{
     const [a,c,e] = [m.length, m.width, m.height];
-    // barang muat kalau ADA SATU orientasi (dari 6) yang pas di dalam truk
     const orients = [[c,e,a],[a,e,c],[c,a,e],[e,a,c],[a,c,e],[e,c,a]];
     const adaYangMuat = orients.some(([w,h,d]) => w<=W && h<=H && d<=D);
     return !adaYangMuat;
@@ -135,12 +200,59 @@ function packItems(mf, fleet) {
   };
 }
 
+// LEVEL 2: multi-start — jalankan beberapa strategi urutan barang,
+// pilih hasil terbaik: barang termuat terbanyak > fill tertinggi > tumpukan terata.
+function stdTumpukan(placed) {
+  if (placed.length === 0) return 0;
+  const h = {};
+  placed.forEach(b => {
+    const k = Math.round(b.x/20)+'_'+Math.round(b.z/20);
+    h[k] = Math.max(h[k]||0, b.y+b.h);
+  });
+  const v = Object.values(h);
+  const avg = v.reduce((a,b)=>a+b,0)/v.length;
+  return Math.sqrt(v.reduce((a,b)=>a+(b-avg)**2,0)/v.length);
+}
+
+function packItems(mf, fleet) {
+  // strategi urutan (deterministik semua — hasil demo selalu konsisten)
+  const strategi = [
+    (a,b) => b.vol - a.vol,                                          // volume terbesar
+    (a,b) => Math.max(b.length,b.width,b.height) - Math.max(a.length,a.width,a.height), // dimensi terpanjang
+    (a,b) => (b.length*b.width) - (a.length*a.width),                // tapak terluas
+    (a,b) => b.height - a.height,                                    // tertinggi dulu
+  ];
+  // batasi jumlah strategi untuk manifest besar agar tetap responsif
+  const n = mf.length;
+  const dipakai = n > 150 ? strategi.slice(0,1) : n > 80 ? strategi.slice(0,2) : strategi;
+
+  let best = null, bestStd = Infinity;
+  for (const s of dipakai) {
+    const r = packSekaliJalan(mf, fleet, s);
+    const rStd = stdTumpukan(r.placed);
+    if (!best ||
+        r.muat > best.muat ||
+        (r.muat === best.muat && r.fill > best.fill) ||
+        (r.muat === best.muat && r.fill === best.fill && rStd < bestStd)) {
+      best = r; bestStd = rStd;
+    }
+  }
+  return best;
+}
+
+// Versi CEPAT (single-pass, tanpa snug) — dipakai untuk EKSPLORASI kombinasi truk.
+// Hasil kombinasi terpilih nanti di-pack ulang dengan packItems penuh untuk visual.
+function packItemsCepat(mf, fleet) {
+  return packSekaliJalan(mf, fleet, (a,b) => b.vol - a.vol, { tanpaSnug: true });
+}
+
 // ------------------------------------------------------------
 // 4b. PENCARI KOMBINASI TRUK OPTIMAL (multi-bin + minimasi biaya)
 // ------------------------------------------------------------
 // Muat barang ke SATU truk, kembalikan barang yang muat + yang tersisa.
-function packSatuTruk(mf, fleet) {
-  const res = packItems(mf, fleet);
+// cepat=true memakai engine eksplorasi (untuk pencarian kombinasi).
+function packSatuTruk(mf, fleet, cepat = false) {
+  const res = cepat ? packItemsCepat(mf, fleet) : packItems(mf, fleet);
   const idMuat = new Set(res.placed.map(b => b.id));
   const muat = mf.filter(m => idMuat.has(m.id));
   const sisa = mf.filter(m => !idMuat.has(m.id));
@@ -150,14 +262,14 @@ function packSatuTruk(mf, fleet) {
 // Strategi greedy: pakai truk `fleet` berkali-kali sampai semua barang habis.
 // Kembalikan daftar "trip" (tiap trip = 1 truk + isinya) atau null kalau ada
 // barang yang tak muat di truk jenis ini sama sekali (kebesaran).
-function packBerulang(mf, fleet, maxTruk = 20) {
+function packBerulang(mf, fleet, maxTruk = 60) {
   const trips = [];
   let sisa = mf.slice();
   let guard = 0;
   while (sisa.length > 0 && guard < maxTruk) {
-    const { res, muat, sisa: sisaBaru } = packSatuTruk(sisa, fleet);
+    const { res, muat, sisa: sisaBaru } = packSatuTruk(sisa, fleet, true);
     if (muat.length === 0) return null; // ada barang yang tak mungkin muat
-    trips.push({ fleet, res, jumlahBarang: muat.length });
+    trips.push({ fleet, res, jumlahBarang: muat.length, barang: muat });
     sisa = sisaBaru;
     guard++;
   }
@@ -189,24 +301,28 @@ function cariKombinasiOptimal(mf, fleets) {
     const trips = [];
     let sisa = mf.slice();
     let guard = 0;
-    while (sisa.length > 0 && guard < 20) {
+    while (sisa.length > 0 && guard < 60) {
       // pilih truk: kalau sisa sedikit, cari truk termurah yang muat semua sisa;
       // kalau tidak, pakai truk awal (kapasitas besar) untuk borong.
       let pilih = null;
       // cari truk termurah yang bisa muat SEMUA sisa dalam 1 truk
+      const volSisa = sisa.reduce((s,m)=>s+m.length*m.width*m.height,0);
+      const beratSisa = sisa.reduce((s,m)=>s+m.weight,0);
       const muatSemua = fleets
-        .map(f => ({ f, r: packSatuTruk(sisa, f) }))
+        .filter(f => f.length*f.width*f.height*0.95 >= volSisa &&
+                     (f.max_weight||Infinity) >= beratSisa) // gating: skip yg mustahil
+        .map(f => ({ f, r: packSatuTruk(sisa, f, true) }))
         .filter(x => x.r.sisa.length === 0)
         .sort((a,b) => a.f.biaya - b.f.biaya);
       if (muatSemua.length > 0) {
         pilih = muatSemua[0].f;
-        trips.push({ fleet: pilih, res: muatSemua[0].r.res, jumlahBarang: muatSemua[0].r.muat.length });
+        trips.push({ fleet: pilih, res: muatSemua[0].r.res, jumlahBarang: muatSemua[0].r.muat.length, barang: muatSemua[0].r.muat });
         sisa = [];
       } else {
         // belum ada yang muat semua sisa; borong pakai truk awal
-        const { res, muat, sisa: sisaBaru } = packSatuTruk(sisa, trukAwal);
+        const { res, muat, sisa: sisaBaru } = packSatuTruk(sisa, trukAwal, true);
         if (muat.length === 0) { trips.length = 0; break; }
-        trips.push({ fleet: trukAwal, res, jumlahBarang: muat.length });
+        trips.push({ fleet: trukAwal, res, jumlahBarang: muat.length, barang: muat });
         sisa = sisaBaru;
       }
       guard++;
@@ -250,6 +366,46 @@ function hancurkanSemuaViz() {
   vizList.forEach(v => { try { v.renderer.dispose(); } catch(e){} });
   vizList = [];
   document.getElementById('vizArea').innerHTML = '';
+}
+
+// Gambar wireframe truk + penanda sisi PINTU (belakang, z = D) via warna.
+// Sisi z=0 = depan (dinding tertutup). Barang dimuat dari depan ke pintu.
+function gambarKontainer(scene, W, H, D) {
+  const ox=-W/2, oy=-H/2, oz=-D/2;
+
+  // wireframe utuh (cyan)
+  scene.add(new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(W,H,D)),
+    new THREE.LineBasicMaterial({color:0x3ad9c5})
+  ));
+
+  // ---- SISI PINTU (belakang, z = D): bidang oranye + bingkai oranye tebal ----
+  const doorZ = oz + D;
+  const door = new THREE.Mesh(
+    new THREE.PlaneGeometry(W, H),
+    new THREE.MeshBasicMaterial({ color:0xffb338, transparent:true, opacity:0.18, side:THREE.DoubleSide }));
+  door.position.set(0, 0, doorZ);
+  scene.add(door);
+  const df = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.PlaneGeometry(W, H)),
+    new THREE.LineBasicMaterial({color:0xffb338}));
+  df.position.set(0, 0, doorZ);
+  scene.add(df);
+
+  // ---- SISI DEPAN (tertutup, z = 0): bidang gelap solid (dinding) ----
+  const back = new THREE.Mesh(
+    new THREE.PlaneGeometry(W, H),
+    new THREE.MeshBasicMaterial({ color:0x1d2832, transparent:true, opacity:0.6, side:THREE.DoubleSide }));
+  back.position.set(0, 0, oz);
+  scene.add(back);
+
+  // ---- LANTAI (biar barang terlihat "duduk") ----
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(W, D),
+    new THREE.MeshBasicMaterial({color:0x10191f, transparent:true, opacity:0.5, side:THREE.DoubleSide}));
+  floor.rotation.x = -Math.PI/2;
+  floor.position.set(0, oy, 0);
+  scene.add(floor);
 }
 
 function buatVizCard(fleetNama, res, opts) {
@@ -302,11 +458,7 @@ function buatVizCard(fleetNama, res, opts) {
   dir.position.set(1,2,1); scene.add(dir);
 
   const {W,H,D} = res.dim;
-  const wire = new THREE.LineSegments(
-    new THREE.EdgesGeometry(new THREE.BoxGeometry(W,H,D)),
-    new THREE.LineBasicMaterial({color:0x3ad9c5})
-  );
-  scene.add(wire);
+  gambarKontainer(scene, W, H, D);
   const ox=-W/2, oy=-H/2, oz=-D/2;
 
   // buat SEMUA mesh barang sekarang (tapi bisa disembunyikan untuk animasi)
@@ -449,15 +601,29 @@ function renderDaftarArmada() {
     return;
   }
   box.innerHTML = FLEETS.map((f,i) => `
-    <label class="fleet-item">
-      <input type="checkbox" class="fleet-check" data-i="${i}">
+    <label class="fleet-item ${f.tersedia ? '' : 'unavail'}">
+      <input type="checkbox" class="fleet-check" data-i="${i}" ${f.tersedia ? '' : 'disabled'}>
       <span class="fleet-info">
         <b>${f.nama}</b>
         <small>${f.length}×${f.width}×${f.height} cm · max ${f.max_weight} kg · ${rupiah(f.biaya||0)}/trip</small>
       </span>
+      <button class="fleet-avail ${f.tersedia ? 'on' : 'off'}" data-i="${i}"
+        title="${f.tersedia ? 'Klik untuk tandai TIDAK tersedia' : 'Klik untuk tandai tersedia'}">
+        ${f.tersedia ? '● Avail' : '○ N/A'}
+      </button>
       <button class="fleet-del" data-i="${i}" title="Hapus armada">✕</button>
     </label>
   `).join('');
+
+  box.querySelectorAll('.fleet-avail').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      const i = +btn.dataset.i;
+      FLEETS[i].tersedia = !FLEETS[i].tersedia;
+      saveFleets(FLEETS);
+      renderDaftarArmada();
+    });
+  });
 
   box.querySelectorAll('.fleet-del').forEach(btn => {
     btn.addEventListener('click', e => {
@@ -485,7 +651,7 @@ document.getElementById('btnSimpanArmada').addEventListener('click', () => {
   if (FLEETS.some(f => f.nama.toLowerCase() === nama.toLowerCase())) {
     alert('Nama armada sudah ada. Pakai nama lain.'); return;
   }
-  FLEETS.push({ nama, length:p, width:l, height:t, max_weight:b, biaya });
+  FLEETS.push({ nama, length:p, width:l, height:t, max_weight:b, biaya, tersedia: true });
   saveFleets(FLEETS);
   renderDaftarArmada();
   ['inNama','inP','inL','inT','inB','inBiaya'].forEach(id => document.getElementById(id).value='');
@@ -704,41 +870,53 @@ function jalankan() {
     alert('Upload file CSV barang dulu.');
     return;
   }
-  const dipilih = [...document.querySelectorAll('.fleet-check:checked')].map(c=>+c.dataset.i);
+  // ambil armada yang DICENTANG dan TERSEDIA (tanpa batas jumlah)
+  const dipilih = [...document.querySelectorAll('.fleet-check:checked')]
+    .map(c => FLEETS[+c.dataset.i])
+    .filter(f => f && f.tersedia);
   if (dipilih.length === 0) {
-    alert('Centang minimal 1 armada dari daftar.');
+    alert('Centang minimal 1 armada yang tersedia.');
     return;
   }
-  if (dipilih.length > 3) {
-    alert('Maksimal 3 armada untuk komparasi (biar visual tetap jelas).');
+  if (dipilih.some(f => !f.biaya || f.biaya <= 0)) {
+    alert('Semua armada terpilih harus punya biaya operasional (Rp/trip).');
     return;
   }
 
-  hancurkanSemuaViz();
-  hasilRun = dipilih.map(i => ({ fleet: FLEETS[i], res: packItems(manifest, FLEETS[i]) }));
+  // SISTEM TERPADU: cari rencana truk paling optimal dari armada terpilih.
+  // Bisa 1 truk, bisa berulang armada sama (mis. 5× Blind Van), bisa campur
+  // (mis. 2× besar + 1× kecil untuk sisa) — dipilih yang total biayanya termurah.
+  const kandidat = cariKombinasiOptimal(manifest, dipilih);
+  if (!kandidat || kandidat.length === 0) {
+    alert('Tidak ada rencana yang bisa memuat semua barang dengan armada terpilih.\nKemungkinan ada barang yang terlalu besar — coba centang armada yang lebih besar.');
+    return;
+  }
 
-  // tentukan rekomendasi: prioritas barang muat terbanyak, lalu fill tertinggi
-  idxRekomendasi = 0;
-  let best = hasilRun[0];
-  hasilRun.forEach((h,i) => {
-    if (i===0) return;
-    if (h.res.muat > best.res.muat ||
-        (h.res.muat === best.res.muat && h.res.fill > best.res.fill)) {
-      best = h; idxRekomendasi = i;
+  const rekom = kandidat[0]; // termurah
+  // FINALISASI: pack ulang tiap truk rencana terpilih dengan engine penuh
+  // (multi-start + snug) supaya visual & susunan berkualitas maksimal.
+  rekom.trips.forEach(t => {
+    if (t.barang && t.barang.length) {
+      const resFinal = packItems(t.barang, t.fleet);
+      if (resFinal.muat >= t.res.muat) {
+        t.res = resFinal;
+        t.jumlahBarang = resFinal.muat;
+      }
     }
   });
+  rekom.fillRata = +(rekom.trips.reduce((s,t)=>s+t.res.fill,0)/rekom.trips.length).toFixed(1);
+  komboAktif = rekom;
+  komboKandidat = kandidat;
 
-  const mode = hasilRun.length > 1 ? 'compare' : 'single';
-
-  if (mode === 'single') {
-    fokusArmada(0); // langsung tampilan tunggal + insight
+  if (rekom.totalTruk === 1) {
+    fokusKomboTruk(0); // 1 truk -> langsung tampilan tunggal + insight
   } else {
-    tampilkanKomparasi();
+    tampilkanKomboCard(); // >1 truk -> card ringkasan berisi mini-grid
   }
 
   const totVol = (manifest.reduce((s,m)=>s+m.length*m.width*m.height,0)/1e6).toFixed(2);
   document.getElementById('infoBox').innerHTML =
-    `Manifest: <b>${manifest.length} barang</b><br>Total volume: <b>${totVol} m³</b><br>Mode: <b>${mode==='compare'?'Komparasi '+hasilRun.length+' armada':'Armada tunggal'}</b>`;
+    `Manifest: <b>${manifest.length} barang</b><br>Total volume: <b>${totVol} m³</b><br>Rencana: <b>${rekom.totalTruk} truk (${rupiah(rekom.totalBiaya)})</b>`;
 }
 
 // ---- MODE: cari kombinasi truk paling optimal (biaya termurah) ----
@@ -759,9 +937,7 @@ function buatVizMini(canvas, res) {
   dir.position.set(1,2,1); scene.add(dir);
 
   const {W,H,D} = res.dim;
-  scene.add(new THREE.LineSegments(
-    new THREE.EdgesGeometry(new THREE.BoxGeometry(W,H,D)),
-    new THREE.LineBasicMaterial({color:0x3ad9c5})));
+  gambarKontainer(scene, W, H, D);
   const ox=-W/2, oy=-H/2, oz=-D/2;
   res.placed.forEach(b => {
     const geo = new THREE.BoxGeometry(b.w*0.96, b.h*0.96, b.d*0.96);
@@ -779,33 +955,6 @@ function buatVizMini(canvas, res) {
   vizList.push(viz);
 }
 
-function jalankanKombinasi() {
-  if (!manifest || manifest.length === 0) {
-    alert('Upload file CSV barang dulu.'); return;
-  }
-  const dipilih = [...document.querySelectorAll('.fleet-check:checked')].map(i=>FLEETS[+i.dataset.i]);
-  const pool = dipilih.length > 0 ? dipilih : FLEETS;
-  if (pool.some(f => !f.biaya || f.biaya<=0)) {
-    alert('Semua armada harus punya biaya operasional. Edit/tambah ulang armada dengan biaya.'); return;
-  }
-
-  const kandidat = cariKombinasiOptimal(manifest, pool);
-  if (!kandidat || kandidat.length === 0) {
-    alert('Tidak ada kombinasi yang bisa memuat semua barang (mungkin ada barang terlalu besar untuk semua armada).');
-    return;
-  }
-
-  const rekom = kandidat[0]; // termurah
-  komboAktif = rekom;
-  komboKandidat = kandidat;
-
-  tampilkanKomboCard(); // 1 card berisi semua truk
-
-  const totVol = (manifest.reduce((s,m)=>s+m.length*m.width*m.height,0)/1e6).toFixed(2);
-  document.getElementById('infoBox').innerHTML =
-    `Manifest: <b>${manifest.length} barang</b><br>Total volume: <b>${totVol} m³</b><br>Mode: <b>Kombinasi optimal (${rekom.totalTruk} truk)</b>`;
-}
-
 // tampilkan SATU card berisi semua truk rekomendasi (mini-grid di dalamnya)
 function tampilkanKomboCard() {
   const rekom = komboAktif;
@@ -818,7 +967,7 @@ function tampilkanKomboCard() {
   card.className = 'viz-card kombo-card clickable';
   card.innerHTML = `
     <div class="viz-head">
-      <div class="viz-title">Kombinasi Optimal — ${rekom.totalTruk} Truk</div>
+      <div class="viz-title">🏆 Kombinasi Termurah — ${rekom.totalTruk} Truk</div>
       <div class="viz-fill good">${rupiah(rekom.totalBiaya)}</div>
     </div>
     <div class="viz-sub">${rekom.trips.map(t=>t.fleet.nama).join(' + ')} · fill rata ${rekom.fillRata}% · semua ${manifest.length} barang termuat</div>
@@ -826,7 +975,6 @@ function tampilkanKomboCard() {
   // grid mini: 1 canvas kecil per truk
   const grid = document.createElement('div');
   grid.className = 'kombo-mini-grid';
-  grid.style.gridTemplateColumns = `repeat(${Math.min(rekom.totalTruk, 3)}, 1fr)`;
   card.appendChild(grid);
   area.appendChild(card);
 
@@ -854,7 +1002,7 @@ function renderKomboInsight() {
   const rekom = komboAktif;
   const alt = komboKandidat.slice(1, 4);
   document.getElementById('hasilArea').innerHTML = `
-    <div class="ref-label">Kombinasi Termurah</div>
+    <div class="ref-label">🏆 Kombinasi Termurah</div>
     <div class="saving" style="margin-top:8px;">
       <div class="cap">Total biaya operasional</div>
       <div class="big">${rupiah(rekom.totalBiaya)}</div>
@@ -890,7 +1038,7 @@ function renderKomboInsight() {
   `;
 }
 
-// fokus 1 truk dari kombinasi, dengan panah navigasi antar truk
+// fokus 1 truk dari rencana, dengan panah navigasi antar truk (jika >1 truk)
 function fokusKomboTruk(idx) {
   const rekom = komboAktif;
   idx = (idx + rekom.totalTruk) % rekom.totalTruk; // wrap
@@ -899,29 +1047,33 @@ function fokusKomboTruk(idx) {
   area.className = 'viz-single';
   area.innerHTML = '';
 
-  // baris navigasi: back + panah kiri/kanan
-  const nav = document.createElement('div');
-  nav.className = 'kombo-nav';
-  nav.innerHTML = `
-    <button class="btn-back" id="komboBack">← Kembali ke kombinasi</button>
-    <div class="kombo-nav-arrows">
-      <button class="nav-arrow" id="komboPrev" title="Truk sebelumnya">◀</button>
-      <span class="nav-indicator">Truk ${idx+1} / ${rekom.totalTruk}</span>
-      <button class="nav-arrow" id="komboNext" title="Truk berikutnya">▶</button>
-    </div>
-  `;
-  area.appendChild(nav);
+  // baris navigasi hanya kalau rencana >1 truk
+  if (rekom.totalTruk > 1) {
+    const nav = document.createElement('div');
+    nav.className = 'kombo-nav';
+    nav.innerHTML = `
+      <button class="btn-back" id="komboBack">← Kembali ke ringkasan</button>
+      <div class="kombo-nav-arrows">
+        <button class="nav-arrow" id="komboPrev" title="Truk sebelumnya">◀</button>
+        <span class="nav-indicator">Truk ${idx+1} / ${rekom.totalTruk}</span>
+        <button class="nav-arrow" id="komboNext" title="Truk berikutnya">▶</button>
+      </div>
+    `;
+    area.appendChild(nav);
+  }
 
   const t = rekom.trips[idx];
   hasilRun = rekom.trips.map(tr => ({ fleet: tr.fleet, res: tr.res }));
-  buatVizCard(`Truk ${idx+1}: ${t.fleet.nama}`, t.res, {
+  buatVizCard(rekom.totalTruk > 1 ? `Truk ${idx+1}: ${t.fleet.nama}` : t.fleet.nama, t.res, {
     recommended: false, index: idx, mode: 'single',
   });
   renderInsight(idx);
 
-  document.getElementById('komboBack').onclick = () => tampilkanKomboCard();
-  document.getElementById('komboPrev').onclick = () => fokusKomboTruk(idx-1);
-  document.getElementById('komboNext').onclick = () => fokusKomboTruk(idx+1);
+  if (rekom.totalTruk > 1) {
+    document.getElementById('komboBack').onclick = () => tampilkanKomboCard();
+    document.getElementById('komboPrev').onclick = () => fokusKomboTruk(idx-1);
+    document.getElementById('komboNext').onclick = () => fokusKomboTruk(idx+1);
+  }
 }
 
 // ------------------------------------------------------------
@@ -968,5 +1120,4 @@ document.getElementById('btnResetCsv').addEventListener('click', function() {
 // MULAI
 // ------------------------------------------------------------
 document.getElementById('btnRun').addEventListener('click', jalankan);
-document.getElementById('btnKombinasi').addEventListener('click', jalankanKombinasi);
 renderDaftarArmada();

@@ -124,6 +124,16 @@
         font-size:13px; padding:4px 6px; border-radius:4px; flex-shrink:0;
     }
     .fleet-del:hover { color:var(--red); background:#2a1a1a; }
+    .fleet-item.unavail { opacity:.45; }
+    .fleet-item.unavail:hover { border-color:var(--line); }
+    .fleet-avail {
+        background:none; border:1px solid var(--line); border-radius:10px;
+        font-size:9px; padding:3px 7px; cursor:pointer; flex-shrink:0;
+        font-weight:700; letter-spacing:.3px;
+    }
+    .fleet-avail.on { color:var(--green); border-color:#1f5345; }
+    .fleet-avail.off { color:var(--dim); }
+    .fleet-avail:hover { border-color:var(--amber); }
     .fleet-empty {
         text-align:center; font-size:12px; color:var(--dim);
         padding:16px 8px; line-height:1.6;
@@ -190,6 +200,8 @@
     .kombo-card { cursor:pointer; }
     .kombo-mini-grid {
         display:grid; gap:8px; flex:1; margin-top:8px; min-height:240px;
+        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)) !important;
+        overflow-y:auto; align-content:start;
     }
     .kombo-mini-cell {
         position:relative; background:#0e1418;
@@ -390,17 +402,16 @@
 
         <div class="divider"></div>
 
-        <div class="label">3 · Pilih Armada (centang 1–3)</div>
+        <div class="label">3 · Pilih Armada (bebas, boleh semua)</div>
         <div class="fleet-list" id="daftarArmada"></div>
 
         <div class="divider"></div>
 
         <button class="btn" id="btnRun">▶ Optimalkan Muatan</button>
-        <button class="btn ghost" id="btnKombinasi" style="text-transform:none; letter-spacing:0; font-weight:700;">🔍 Cari Kombinasi Truk Termurah</button>
 
         <div class="info-box" id="infoBox">
         Upload CSV barang, pilih armada, lalu klik <b>Optimalkan Muatan</b>.<br>
-        Centang <b>2–3 armada</b> untuk komparasi, atau klik <b>Cari Kombinasi Truk Termurah</b> untuk rekomendasi otomatis (bisa 2 truk kecil vs 1 besar).
+        Centang armada yang mau dipakai (boleh semua). Sistem otomatis menghitung <b>berapa truk dibutuhkan</b> dan memilih <b>rencana termurah</b> — termasuk campuran (mis. 2 besar + 1 kecil untuk sisa).
         </div>
     </div>
 
