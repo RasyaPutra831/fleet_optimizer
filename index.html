@@ -201,19 +201,30 @@
     .kombo-mini-grid {
         display:grid; gap:8px; flex:1; margin-top:8px; min-height:240px;
         grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)) !important;
+        grid-auto-rows: 210px;           /* tinggi baris tetap -> cell tidak gepeng */
         overflow-y:auto; align-content:start;
     }
     .kombo-mini-cell {
         position:relative; background:#0e1418;
         border:1px solid var(--line); border-radius:6px;
         display:flex; flex-direction:column; overflow:hidden;
+        min-height:0;                     /* izinkan anak flex menyusut sesuai baris */
     }
     .mini-label {
         font-size:10px; color:var(--dim); padding:5px 8px;
-        border-bottom:1px solid var(--line); font-weight:600;
+        border-bottom:1px solid var(--line); font-weight:600; flex:0 0 auto;
     }
-    .mini-canvas { width:100%; flex:1; min-height:180px; display:block; }
+    .mini-canvas { width:100%; flex:1 1 auto; min-height:0; display:block; }
     .kombo-card.clickable:hover { border-color:var(--amber); }
+
+    .rencana-card { cursor:pointer; min-height:300px; }
+    .rencana-card.selected { border-color:var(--amber); box-shadow:0 0 0 1px var(--amber); }
+    .rencana-mini-grid {
+        display:grid; gap:6px; flex:1; margin-top:8px; min-height:200px;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        grid-auto-rows: 150px;
+        overflow-y:auto; align-content:start;
+    }
 
     /* Navigasi antar truk saat fokus */
     .kombo-nav {
@@ -345,6 +356,42 @@
 
     ::-webkit-scrollbar { width:6px; }
     ::-webkit-scrollbar-thumb { background:var(--line); border-radius:3px; }
+    /* ---- Overlay loading ---- */
+    #loadingOverlay {
+        position:fixed; inset:0; z-index:9999;
+        background:rgba(14,20,24,.82); backdrop-filter:blur(2px);
+        display:flex; align-items:center; justify-content:center;
+        opacity:0; visibility:hidden; transition:opacity .18s ease;
+    }
+    #loadingOverlay.show { opacity:1; visibility:visible; }
+    .loading-box {
+        background:var(--panel); border:1px solid var(--line);
+        border-radius:12px; padding:26px 34px; text-align:center;
+        box-shadow:0 12px 40px rgba(0,0,0,.5); min-width:260px;
+    }
+    .loading-truck {
+        width:130px; height:52px; margin:0 auto 16px;
+        border:2px solid var(--teal); border-radius:5px;
+        position:relative; overflow:hidden;
+    }
+    /* garis "muatan" yang bergerak mengisi truk */
+    .loading-bar {
+        position:absolute; left:5px; right:5px; bottom:5px; top:5px;
+        display:flex; align-items:flex-end;
+    }
+    .loading-bar span {
+        display:block; width:100%; background:var(--amber);
+        border-radius:2px; height:20%;
+        animation:isiTruk 1.1s ease-in-out infinite;
+    }
+    @keyframes isiTruk {
+        0%   { height:15%; opacity:.55; }
+        50%  { height:100%; opacity:1; }
+        100% { height:15%; opacity:.55; }
+    }
+    .loading-text { font-size:13px; font-weight:600; color:var(--ink); }
+    .loading-sub  { font-size:11px; color:var(--dim); margin-top:4px; }
+
     </style>
 </head>
 <body>
@@ -438,6 +485,17 @@
         </div>
     </div>
 
+    </div>
+
+    <!-- Overlay loading saat proses berat (optimasi / render banyak visual) -->
+    <div id="loadingOverlay">
+        <div class="loading-box">
+            <div class="loading-truck">
+                <div class="loading-bar"><span></span></div>
+            </div>
+            <div class="loading-text" id="loadingText">Memproses…</div>
+            <div class="loading-sub">Mohon tunggu sebentar</div>
+        </div>
     </div>
 
     <!-- Untuk demo OFFLINE: ganti baris di bawah jadi <script src="three.min.js"></script> -->
